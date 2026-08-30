@@ -1,0 +1,46 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Conda
+.conda/
+
+# IDE
+.vscode/
+.idea/
+
+# Jupyter notebooks
+.ipynb_checkpoints/
+*.ipynb
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Datasets
+data/*
+!data/.gitkeep
+
+# Training results
+runs/*
+!runs/.gitkeep
+
+# Model checkpoints
+checkpoints/*
+!checkpoints/.gitkeep
+
+# PyTorch model weights
+*.pth
+*.pt
+
+# Logs
+*.log
+
+# Cache
+.cache/
