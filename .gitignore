@@ -44,3 +44,9 @@ checkpoints/*
 
 # Cache
 .cache/
+
+!runs/final_tinyvgg/
+!runs/final_tinyvgg/**
+!runs/final_efficientnet/
+!runs/final_efficientnet/**
+!checkpoints/final_tinyvgg.pth
