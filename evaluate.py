@@ -8,6 +8,7 @@ from pytorch_framework.data.loaders import create_dataloaders
 from pytorch_framework.data.transforms import get_basic_transform
 from pytorch_framework.engine.classification import ClassificationTrainer
 from pytorch_framework.models.tiny_vgg import TinyVGG
+from pytorch_framework.models.transfer import EfficientNetB0Transfer
 from pytorch_framework.utils.checkpoints import load_checkpoint
 
 
@@ -47,13 +48,32 @@ def main():
         device=device,
     )
 
+    model_name = checkpoint["model_name"]
     config = checkpoint["model_config"]
+    class_names = checkpoint["class_names"]
 
-    model = TinyVGG(
-        input_channels=config["input_channels"],
-        hidden_units=config["hidden_units"],
-        output_shape=config["output_shape"],
-    )
+    if model_name == "tinyvgg":
+        model = TinyVGG(
+            input_channels=config["input_channels"],
+            hidden_units=config["hidden_units"],
+            output_shape=config["output_shape"],
+        )
+
+        transform = get_basic_transform(
+            image_size=config["image_size"]
+        )
+
+    elif model_name == "efficientnet_b0":
+        model = EfficientNetB0Transfer(
+            num_classes=config["num_classes"]
+        )
+
+        transform = model.get_transforms()
+
+    else:
+        raise ValueError(
+            f"Unsupported model: {model_name}"
+        )
 
     model.load_state_dict(
         checkpoint["model_state_dict"]
@@ -63,11 +83,7 @@ def main():
 
     dataset_path = download_dataset()
 
-    transform = get_basic_transform(
-        image_size=config["image_size"]
-    )
-
-    train_loader, test_loader, class_names = create_dataloaders(
+    _, test_loader, _ = create_dataloaders(
         train_dir=dataset_path / "train",
         test_dir=dataset_path / "test",
         train_transform=transform,
@@ -79,7 +95,10 @@ def main():
     loss_fn = nn.CrossEntropyLoss()
 
     optimizer = torch.optim.Adam(
-        model.parameters()
+        filter(
+            lambda parameter: parameter.requires_grad,
+            model.parameters(),
+        )
     )
 
     trainer = ClassificationTrainer(
@@ -94,6 +113,7 @@ def main():
     )
 
     print(f"Device: {device}")
+    print(f"Model: {model_name}")
     print(f"Classes: {class_names}")
     print(f"Test loss: {test_loss:.4f}")
     print(f"Test accuracy: {test_accuracy:.4f}")
