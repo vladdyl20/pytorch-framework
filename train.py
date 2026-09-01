@@ -5,6 +5,7 @@ import torch
 from torch import nn
 
 from pytorch_framework.data.download import download_dataset
+from pytorch_framework.data.datasets import CustomImageDataset
 from pytorch_framework.data.loaders import create_dataloaders
 from pytorch_framework.data.transforms import (
     get_basic_transform,
@@ -12,6 +13,7 @@ from pytorch_framework.data.transforms import (
 )
 from pytorch_framework.engine.classification import ClassificationTrainer
 from pytorch_framework.models.tiny_vgg import TinyVGG
+from pytorch_framework.models.transfer import EfficientNetB0Transfer
 from pytorch_framework.utils.checkpoints import save_checkpoint
 from pytorch_framework.utils.logging import save_history_csv, save_history_json
 from pytorch_framework.utils.plots import save_training_plots
@@ -20,6 +22,13 @@ from pytorch_framework.utils.seed import set_seed
 
 def parse_args():
     parser = argparse.ArgumentParser()
+
+    parser.add_argument(
+        "--model",
+        type=str,
+        choices=["tinyvgg", "efficientnet_b0"],
+        default="tinyvgg",
+    )
 
     parser.add_argument(
         "--epochs",
@@ -60,7 +69,7 @@ def parse_args():
     parser.add_argument(
         "--experiment",
         type=str,
-        default="tinyvgg_baseline",
+        default="experiment",
     )
 
     return parser.parse_args()
@@ -76,19 +85,52 @@ def main():
     )
 
     print(f"Device: {device}")
+    print(f"Model: {args.model}")
 
     dataset_path = download_dataset()
 
     train_dir = dataset_path / "train"
     test_dir = dataset_path / "test"
 
-    train_transform = get_train_transform(
-        image_size=args.image_size
-    )
+    dataset_info = CustomImageDataset(train_dir)
 
-    test_transform = get_basic_transform(
-        image_size=args.image_size
-    )
+    class_names = dataset_info.classes
+
+    print(f"Classes: {class_names}")
+
+    if args.model == "tinyvgg":
+        train_transform = get_train_transform(
+            image_size=args.image_size
+        )
+
+        test_transform = get_basic_transform(
+            image_size=args.image_size
+        )
+
+        model = TinyVGG(
+            input_channels=3,
+            hidden_units=args.hidden_units,
+            output_shape=len(class_names),
+        )
+
+        model_config = {
+            "input_channels": 3,
+            "hidden_units": args.hidden_units,
+            "output_shape": len(class_names),
+            "image_size": args.image_size,
+        }
+
+    else:
+        model = EfficientNetB0Transfer(
+            num_classes=len(class_names)
+        )
+
+        train_transform = model.get_transforms()
+        test_transform = model.get_transforms()
+
+        model_config = {
+            "num_classes": len(class_names),
+        }
 
     train_loader, test_loader, class_names = create_dataloaders(
         train_dir=train_dir,
@@ -99,20 +141,16 @@ def main():
         num_workers=args.num_workers,
     )
 
-    print(f"Classes: {class_names}")
     print(f"Train batches: {len(train_loader)}")
     print(f"Test batches: {len(test_loader)}")
-
-    model = TinyVGG(
-        input_channels=3,
-        hidden_units=args.hidden_units,
-        output_shape=len(class_names),
-    )
 
     loss_fn = nn.CrossEntropyLoss()
 
     optimizer = torch.optim.Adam(
-        model.parameters(),
+        filter(
+            lambda parameter: parameter.requires_grad,
+            model.parameters(),
+        ),
         lr=args.learning_rate,
     )
 
@@ -155,14 +193,9 @@ def main():
         model=model,
         optimizer=optimizer,
         path=Path("checkpoints") / f"{args.experiment}.pth",
-        model_name="tinyvgg",
+        model_name=args.model,
         class_names=class_names,
-        model_config={
-            "input_channels": 3,
-            "hidden_units": args.hidden_units,
-            "output_shape": len(class_names),
-            "image_size": args.image_size,
-        },
+        model_config=model_config,
     )
 
     print(f"Results saved to: {run_dir}")
